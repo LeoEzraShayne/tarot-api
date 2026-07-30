@@ -1,0 +1,38 @@
+import crypto from 'node:crypto';
+import Fastify from 'fastify';
+import cors from '@fastify/cors';
+import cookie from '@fastify/cookie';
+import rateLimit from '@fastify/rate-limit';
+import swagger from '@fastify/swagger';
+import swaggerUi from '@fastify/swagger-ui';
+import { SPREADS } from './spreads.mjs';
+import { tarotCards, tarotCardById, DATASET } from './tarotoo.mjs';
+import { createReadingSession, chooseCards, revealCards, getSession } from './session-engine.mjs';
+import { deterministicInterpretation } from './reading-engine.mjs';
+import { signInWithGoogle, currentUser, logout } from './auth.mjs';
+import { query } from './db/pool.mjs';
+
+const app=Fastify({logger:{redact:['req.headers.authorization','req.headers.cookie','res.headers.set-cookie','body.question','body.credential']},bodyLimit:64_000});
+const origins=(process.env.WEB_ORIGINS||'http://127.0.0.1:4173,http://127.0.0.1:4174,http://localhost:4173,https://tarot.meritledger.org').split(',');
+await app.register(cors,{origin:(origin,cb)=>cb(null,!origin||origins.includes(origin)),credentials:true});
+await app.register(cookie);await app.register(rateLimit,{max:120,timeWindow:'1 minute'});
+await app.register(swagger,{openapi:{info:{title:'TAROT API',version:'1.0.0',description:'Deterministic tarot reading sessions with evidence-grounded interpretation.'}}});
+await app.register(swaggerUi,{routePrefix:'/docs'});
+
+app.setErrorHandler((error,request,reply)=>{request.log.warn({err:error},'request failed');reply.code(error.statusCode||500).send({error:error.statusCode?'request_error':'internal_error',message:error.statusCode?error.message:'The request could not be completed.'});});
+app.get('/health',async()=>({ok:true,service:'tarot-api',version:'1.0.0'}));
+app.get('/v1/spreads',async()=>({spreads:SPREADS}));
+app.get('/v1/cards/:id',async req=>{const card=tarotCardById.get(String(req.params.id));if(!card)throw Object.assign(new Error('Card not found.'),{statusCode:404});return {card,dataset:DATASET};});
+app.post('/v1/reading-sessions',{config:{rateLimit:{max:20,timeWindow:'1 minute'}}},async(req,reply)=>reply.code(201).send(createReadingSession(req.body||{})));
+app.post('/v1/reading-sessions/:id/selections',async req=>chooseCards(req.params.id,req.body?.deckIndices));
+app.post('/v1/reading-sessions/:id/reveal',async req=>revealCards(req.params.id));
+app.post('/v1/reading-sessions/:id/interpretation',{config:{rateLimit:{max:20,timeWindow:'1 minute'}}},async req=>deterministicInterpretation(req.params.id));
+app.post('/v1/readings/:id/save',async req=>{const user=await currentUser(req);if(!user)throw Object.assign(new Error('Sign in to save a reading.'),{statusCode:401});const s=getSession(req.params.id),interpretation=deterministicInterpretation(s.id);await query(`INSERT INTO readings(id,user_id,anonymous_session_id,question,spread_id,seed,state,interpretation) VALUES($1,$2,$1,$3,$4,$5,$6,$7) ON CONFLICT(id) DO UPDATE SET user_id=EXCLUDED.user_id,interpretation=EXCLUDED.interpretation,updated_at=now()`,[s.id,user.id,s.question,s.spreadId,s.seed,s.state,interpretation]);return {saved:true,id:s.id};});
+app.post('/v1/readings/:id/feedback',async req=>{const user=await currentUser(req);const id=crypto.randomUUID();await query('INSERT INTO feedback(id,reading_id,user_id,helpful,note) VALUES($1,$2,$3,$4,$5)',[id,req.params.id,user?.id||null,req.body?.helpful??null,String(req.body?.note||'').slice(0,1000)]);return {saved:true};});
+app.get('/v1/me',async req=>({user:await currentUser(req)}));
+app.get('/v1/me/readings',async req=>{const user=await currentUser(req);if(!user)throw Object.assign(new Error('Authentication required.'),{statusCode:401});return {readings:(await query('SELECT id,question,spread_id,state,created_at,updated_at FROM readings WHERE user_id=$1 ORDER BY created_at DESC LIMIT 100',[user.id])).rows};});
+app.post('/v1/auth/google',{config:{rateLimit:{max:10,timeWindow:'1 minute'}}},async(req,reply)=>{const result=await signInWithGoogle(req.body?.credential);reply.setCookie('tarot_session',result.token,{httpOnly:true,secure:process.env.NODE_ENV==='production',sameSite:'lax',path:'/',expires:result.expires});return {user:result.user};});
+app.post('/v1/logout',async(req,reply)=>{await logout(req.cookies?.tarot_session);reply.clearCookie('tarot_session',{path:'/'});return {ok:true};});
+
+if(process.env.NODE_ENV!=='test')await app.listen({host:process.env.HOST||'127.0.0.1',port:Number(process.env.PORT||4400)});
+export default app;

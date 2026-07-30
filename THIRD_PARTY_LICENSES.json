@@ -1,0 +1,11 @@
+{
+  "datasets": [
+    {
+      "name": "Tarotoo Tarot Card Meanings Dataset",
+      "source": "https://github.com/Tarotoo-com/tarotoo-tarot-dataset",
+      "license": "MIT",
+      "doi": "10.5281/zenodo.21285777",
+      "usage": "Card names, associations, upright and reversed meanings. Card artwork is not included."
+    }
+  ]
+}

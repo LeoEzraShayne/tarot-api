@@ -1,0 +1,21 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import { createReadingSession,chooseCards,revealCards,resetSessions } from '../src/session-engine.mjs';
+import { deterministicInterpretation } from '../src/reading-engine.mjs';
+import { tarotCards } from '../src/tarotoo.mjs';
+import { SPREADS } from '../src/spreads.mjs';
+
+test.beforeEach(()=>resetSessions());
+test('dataset and catalog are complete',()=>{assert.equal(tarotCards.length,78);assert.equal(SPREADS.length,14);assert.equal(SPREADS.filter(x=>x.available).length,4)});
+test('session freezes 78 cards and reveals selected positions',()=>{const s=createReadingSession({question:'What should I understand about this change?',spreadId:'general-reflection',seed:'fixed'});assert.equal(s.deckSize,78);chooseCards(s.id,[0,20,77]);const shown=revealCards(s.id);assert.equal(shown.cards.length,3);assert.deepEqual(shown.cards.map(x=>x.position),['Background','Core','Guidance'])});
+test('same seed and inputs produce the same draw',()=>{const a=createReadingSession({question:'A question',spreadId:'general-reflection',seed:'same'}),b=createReadingSession({question:'A question',spreadId:'general-reflection',seed:'same'});chooseCards(a.id,[2,15,68]);chooseCards(b.id,[2,15,68]);assert.deepEqual(revealCards(a.id).cards.map(x=>[x.cardId,x.orientation]),revealCards(b.id).cards.map(x=>[x.cardId,x.orientation]))});
+test('reveal is idempotent and selections lock afterward',()=>{const s=createReadingSession({question:'How can I approach this?',spreadId:'decision-clarity',seed:'lock'});chooseCards(s.id,[1,2,3]);assert.deepEqual(revealCards(s.id),revealCards(s.id));assert.throws(()=>chooseCards(s.id,[4,5,6]),/cannot be changed/)});
+test('invalid state and duplicate cards are rejected',()=>{const s=createReadingSession({question:'How should I proceed?',spreadId:'work-direction'});assert.throws(()=>chooseCards(s.id,[1,1,2]),/unique/);chooseCards(s.id,[1,2]);assert.throws(()=>revealCards(s.id),/Select every/)});
+test('question validation and unavailable spreads are enforced',()=>{assert.throws(()=>createReadingSession({question:'',spreadId:'general-reflection'}),/1–200/);assert.throws(()=>createReadingSession({question:'x'.repeat(201),spreadId:'general-reflection'}),/1–200/);assert.throws(()=>createReadingSession({question:'Question',spreadId:'daily-reflection'}),/not available/)});
+
+const cases=[
+ ['general-reflection','What pattern is shaping this transition?'],['general-reflection','What am I overlooking in this friendship?'],['general-reflection','How can I work with my uncertainty?'],['general-reflection','What deserves my attention this week?'],['general-reflection','What can I approach differently?'],
+ ['relationship-reflection','How can I communicate more clearly with my partner?'],['relationship-reflection','What boundary would support this friendship?'],['relationship-reflection','How can I listen without losing my own view?'],['relationship-reflection','What shared pattern should we notice?'],['relationship-reflection','What is a healthy next step after conflict?'],
+ ['work-direction','What should I understand about my role at work?'],['work-direction','How can I approach this career decision?'],['work-direction','What friction is slowing this project?'],['work-direction','Where can I use my energy more effectively?'],['work-direction','What practical step would clarify this opportunity?'],
+ ['decision-clarity','What matters most in this choice?'],['decision-clarity','What assumption should I test before deciding?'],['decision-clarity','How can I compare these options fairly?'],['decision-clarity','What complication am I avoiding?'],['decision-clarity','What reversible next step can I take?']
+];
+for(const [spreadId,question] of cases)test(`calibration: ${spreadId} — ${question}`,()=>{const s=createReadingSession({question,spreadId,seed:`${spreadId}:${question}`});chooseCards(s.id,[3,31,70]);revealCards(s.id);const result=deterministicInterpretation(s.id);assert.equal(result.draw.length,3);assert.equal(result.sections.length,3);assert.match(result.safety,/not prediction/i);assert.equal(result.confidence.meaning.includes('predictive'),true);assert.deepEqual(result.draw.map(x=>x.cardId),result.sections.map(x=>x.cardId));assert.deepEqual(result,deterministicInterpretation(s.id))});
