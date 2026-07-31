@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+SOURCE_DIR="${1:?source directory required}"
+RELEASE_ID="${2:-manual}"
+APP_DIR=/var/www/tarot-api
+BACKUP_DIR=/var/www/tarot-api-backup
+
+sudo mkdir -p "$APP_DIR" "$BACKUP_DIR"
+sudo rsync -a --delete --exclude .env --exclude node_modules "$APP_DIR/" "$BACKUP_DIR/"
+sudo rsync -a --delete --exclude .git --exclude .env --exclude node_modules "$SOURCE_DIR/" "$APP_DIR/"
+sudo chown -R ubuntu:ubuntu "$APP_DIR" "$BACKUP_DIR"
+cd "$APP_DIR"
+npm ci --omit=dev
+npm run migrate
+if ! pm2 startOrReload ecosystem.config.cjs --env production; then
+  sudo rsync -a --delete --exclude .env "$BACKUP_DIR/" "$APP_DIR/"
+  pm2 startOrReload ecosystem.config.cjs --env production
+  exit 1
+fi
+curl --fail --silent --retry 5 --retry-delay 2 http://127.0.0.1:4400/health
+printf 'Deployed %s\n' "$RELEASE_ID"
