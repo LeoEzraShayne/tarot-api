@@ -8,7 +8,7 @@
     "start": "node src/server.mjs",
     "test": "node --test",
     "check": "node --check src/server.mjs && node --test",
-    "migrate": "node src/db/migrate.mjs"
+    "migrate": "node --env-file-if-exists=.env src/db/migrate.mjs"
   },
   "engines": { "node": ">=20" },
   "dependencies": {
