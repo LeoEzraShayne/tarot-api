@@ -1,6 +1,8 @@
 import crypto from 'node:crypto';
 import { spreadById } from './spreads.mjs';
 import { tarotCards, tarotCardById, DATASET } from './tarotoo.mjs';
+import { tarotCardZhById } from './data/cards.zh.mjs';
+import { localizedSpread } from './spreads.mjs';
 
 const sessions = new Map();
 const hash = value => crypto.createHash('sha256').update(value).digest();
@@ -36,13 +38,13 @@ export function chooseCards(id,indices){
   return publicSession(s);
 }
 
-export function revealCards(id){
+export function revealCards(id,locale='en'){
   const s=getSession(id), spread=spreadById.get(s.spreadId);
-  if(s.state==='revealed'||s.state==='interpreted')return revealedSession(s);
+  if(s.state==='revealed'||s.state==='interpreted')return revealedSession(s,locale);
   if(s.state!=='selecting'||s.selections.length!==spread.cards)throw Object.assign(new Error('Select every required card before revealing.'),{statusCode:409});
-  s.state='revealed'; return revealedSession(s);
+  s.state='revealed'; return revealedSession(s,locale);
 }
 
-export function revealedSession(s){const spread=spreadById.get(s.spreadId);return {...publicSession(s),cards:s.selections.map((pick,index)=>{const card=tarotCardById.get(pick.cardId);return {positionId:index,position:spread.positions[index],cardId:card.id,cardName:card.name,orientation:s.orientations[card.id],dataset:DATASET};})};}
+export function revealedSession(s,locale='en'){const spread=localizedSpread(spreadById.get(s.spreadId),locale);return {...publicSession(s),locale,cards:s.selections.map((pick,index)=>{const card=tarotCardById.get(pick.cardId),localized=locale==='zh-CN'?tarotCardZhById.get(card.id):card;return {positionId:index,position:spread.positions[index],cardId:card.id,cardName:localized.name,orientation:s.orientations[card.id],dataset:DATASET};})};}
 
 export function resetSessions(){sessions.clear();}

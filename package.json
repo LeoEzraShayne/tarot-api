@@ -6,8 +6,8 @@
   "scripts": {
     "dev": "node --watch src/server.mjs",
     "start": "node src/server.mjs",
-    "test": "node --test",
-    "check": "node --check src/server.mjs && node --test",
+    "test": "NODE_ENV=test node --test",
+    "check": "node --check src/server.mjs && NODE_ENV=test node --test",
     "migrate": "node --env-file-if-exists=.env src/db/migrate.mjs"
   },
   "engines": { "node": ">=20" },
