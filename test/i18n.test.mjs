@@ -5,7 +5,7 @@ import { tarotCards } from '../src/tarotoo.mjs';
 import { tarotCardsZh } from '../src/data/cards.zh.mjs';
 import { SPREADS, localizedSpreads } from '../src/spreads.mjs';
 import { createReadingSession, chooseCards, revealCards, resetSessions } from '../src/session-engine.mjs';
-import { deterministicInterpretation } from '../src/reading-engine.mjs';
+import { deterministicInterpretation, localizeStoredInterpretation } from '../src/reading-engine.mjs';
 
 test('all 78 cards have a unique and complete Chinese mapping',()=>{
   assert.equal(tarotCardsZh.length,78);
@@ -37,6 +37,21 @@ test('English and Chinese interpretations preserve identical evidence',async()=>
     assert.equal(en.confidence.score,zh.confidence.score);
     assert.equal(en.locale,'en');assert.equal(zh.locale,'zh-CN');
   }
+});
+
+test('saved readings are localized without changing their draw',()=>{
+  resetSessions();
+  const {id}=createReadingSession({question:'What should I understand about this change?',spreadId:'celtic-cross-classic',seed:'saved-localization'});
+  chooseCards(id,Array.from({length:10},(_,index)=>index*7));
+  revealCards(id,'en');
+  const saved=deterministicInterpretation(id,'en');
+  const localized=localizeStoredInterpretation(saved,'zh-CN');
+  const evidence=value=>value.draw.map(card=>[card.positionId,card.cardId,card.orientation]);
+  assert.equal(localized.locale,'zh-CN');
+  assert.deepEqual(evidence(localized),evidence(saved));
+  assert.equal(localized.confidence.score,saved.confidence.score);
+  assert.notEqual(localized.sections[0].cardName,saved.sections[0].cardName);
+  assert.match(localized.safety,/用于反思/);
 });
 
 test('unsupported languages fall back to English',async()=>{
