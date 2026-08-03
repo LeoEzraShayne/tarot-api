@@ -25,13 +25,14 @@ test.beforeEach(()=>{resetSessions();setAiClientForTests(null)});
 test.after(()=>setAiClientForTests(null));
 
 test('AI narrative is merged without changing deterministic card evidence',async()=>{
-  let calls=0;
-  setAiClientForTests({responses:{create:async()=>{calls++;return {output_text:JSON.stringify(validNarrative)}}}});
+  let calls=0,requestOptions;
+  setAiClientForTests({responses:{create:async(_body,options)=>{calls++;requestOptions=options;return {output_text:JSON.stringify(validNarrative)}}}});
   const id=prepared(),result=await generateInterpretation(id,'en');
   assert.equal(result.generation.mode,'ai');assert.equal(result.userContext,'A known deadline is approaching.');
   assert.deepEqual(result.sections.map(x=>x.cardId),result.draw.map(x=>x.cardId));
   assert.deepEqual(result.sections.map(x=>x.evidenceIds[0]),['card-1','card-2','card-3']);
   assert.equal((await generateInterpretation(id,'en')),result);assert.equal(calls,1);
+  assert.equal(requestOptions.timeout,35000);assert.equal(requestOptions.maxRetries,0);assert.ok(requestOptions.signal instanceof AbortSignal);
 });
 
 test('invalid evidence retries once and falls back to deterministic rules',async()=>{

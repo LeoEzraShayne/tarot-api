@@ -53,10 +53,11 @@ async function client(){
   if(injectedClient)return injectedClient;
   if(!process.env.OPENAI_API_KEY)return null;
   const {default:OpenAI}=await import('openai');
-  return new OpenAI({apiKey:process.env.OPENAI_API_KEY});
+  return new OpenAI({apiKey:process.env.OPENAI_API_KEY,maxRetries:0,timeout:35000});
 }
 
 async function requestNarrative(openai,base,locale,repair=false){
+  const timeout=repair?15000:35000;
   const response=await openai.responses.create({
     model:MODEL,
     reasoning:{effort:'low'},
@@ -65,7 +66,7 @@ async function requestNarrative(openai,base,locale,repair=false){
       {role:'system',content:[{type:'input_text',text:systemFor(locale)}]},
       {role:'user',content:[{type:'input_text',text:promptFor(base,locale)+(repair?'\nYour previous response failed evidence validation. Return a corrected complete response using every card exactly once.':'')}]}
     ]
-  },{timeout:repair?15000:35000});
+  },{timeout,maxRetries:0,signal:AbortSignal.timeout(timeout)});
   return validate(JSON.parse(response.output_text),base);
 }
 
