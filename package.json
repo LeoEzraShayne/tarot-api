@@ -10,7 +10,9 @@
     "check": "node --check src/server.mjs && NODE_ENV=test node --test",
     "migrate": "node --env-file-if-exists=.env src/db/migrate.mjs"
   },
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",
     "@fastify/cors": "^11.0.1",
@@ -19,6 +21,7 @@
     "@fastify/swagger-ui": "^6.1.1",
     "fastify": "^5.4.0",
     "google-auth-library": "^10.2.1",
+    "openai": "^7.3.0",
     "pg": "^8.16.3",
     "tarotoo-tarot": "^1.0.2"
   }

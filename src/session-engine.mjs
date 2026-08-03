@@ -15,20 +15,22 @@ function frozenDeck(seed) {
   return {order,orientations:Object.fromEntries(order.map(id=>[id,rng()<0.32?'reversed':'upright']))};
 }
 
-export function createReadingSession({question,spreadId,seed}) {
+export function createReadingSession({question,spreadId,seed,userContext=''}) {
   const normalized=question?.trim();
   if(!normalized || normalized.length>200) throw Object.assign(new Error('Question must contain 1–200 characters.'),{statusCode:400});
+  const normalizedContext=String(userContext||'').trim();
+  if(normalizedContext.length>500) throw Object.assign(new Error('Context must contain no more than 500 characters.'),{statusCode:400});
   const spread=spreadById.get(spreadId);
   if(!spread?.available) throw Object.assign(new Error('Spread is not available.'),{statusCode:400});
   const id=crypto.randomUUID();
   const frozen=frozenDeck(seed || `${id}:${normalized}:${spreadId}`);
-  const session={id,question:normalized,spreadId,state:'selecting',seed:seed||id,order:frozen.order,orientations:frozen.orientations,selections:[],createdAt:new Date().toISOString(),engineVersion:'1.0.0'};
+  const session={id,question:normalized,userContext:normalizedContext,spreadId,state:'selecting',seed:seed||id,order:frozen.order,orientations:frozen.orientations,selections:[],createdAt:new Date().toISOString(),engineVersion:'1.1.0',interpretations:{}};
   sessions.set(id,session);
   return publicSession(session);
 }
 
 export function getSession(id){const value=sessions.get(id);if(!value)throw Object.assign(new Error('Reading session not found.'),{statusCode:404});return value;}
-export function publicSession(s){return {id:s.id,question:s.question,spreadId:s.spreadId,state:s.state,deckSize:s.order.length,selections:s.selections.map(x=>({deckIndex:x.deckIndex,positionIndex:x.positionIndex})),createdAt:s.createdAt,engineVersion:s.engineVersion};}
+export function publicSession(s){return {id:s.id,question:s.question,userContext:s.userContext||'',spreadId:s.spreadId,state:s.state,deckSize:s.order.length,selections:s.selections.map(x=>({deckIndex:x.deckIndex,positionIndex:x.positionIndex})),createdAt:s.createdAt,engineVersion:s.engineVersion};}
 
 export function chooseCards(id,indices){
   const s=getSession(id), spread=spreadById.get(s.spreadId);
