@@ -70,6 +70,13 @@ async function requestNarrative(openai,base,locale,repair=false){
   return validate(JSON.parse(response.output_text),base);
 }
 
+function isOperationalFailure(error){
+  const status=Number(error?.status||error?.statusCode||0);
+  const name=String(error?.name||'').toLowerCase();
+  const message=String(error?.message||error||'').toLowerCase();
+  return name.includes('abort')||name.includes('timeout')||status===429||status>=500||/aborted|timeout|timed out|429|connection|network|socket/.test(message);
+}
+
 export async function generateInterpretation(id,locale='en'){
   const s=getSession(id);
   if(!['revealed','interpreted'].includes(s.state))throw Object.assign(new Error('Reveal cards before interpretation.'),{statusCode:409});
@@ -81,12 +88,13 @@ export async function generateInterpretation(id,locale='en'){
   try{
     let narrative;
     try{narrative=await requestNarrative(openai,base,locale);}
-    catch(first){if(/timeout|429|5\d\d|connection/i.test(String(first?.message||first)))throw first;narrative=await requestNarrative(openai,base,locale,true);}
+    catch(first){if(isOperationalFailure(first))throw first;narrative=await requestNarrative(openai,base,locale,true);}
     const result=merge(base,narrative);s.state='interpreted';s.interpretations[key]=result;
     console.info(JSON.stringify({event:'interpretation',sessionId:s.id,mode:'ai',model:MODEL,promptVersion:PROMPT_VERSION,latencyMs:Date.now()-started}));
     return result;
   }catch(error){
     console.warn(JSON.stringify({event:'interpretation',sessionId:s.id,mode:'rules',model:MODEL,promptVersion:PROMPT_VERSION,latencyMs:Date.now()-started,fallbackReason:error?.name||'generation_failed'}));
+    s.state='interpreted';s.interpretations[key]=base;
     return base;
   }
 }

@@ -53,6 +53,16 @@ test('duplicate or missing per-card evidence invalidates the AI result',async()=
   assert.equal(calls,2);
 });
 
+test('timeouts fall back immediately and cache the deterministic result',async()=>{
+  let calls=0;
+  const timeout=Object.assign(new Error('The operation was aborted'),{name:'AbortError'});
+  setAiClientForTests({responses:{create:async()=>{calls++;throw timeout}}});
+  const id=prepared(),result=await generateInterpretation(id,'en');
+  assert.equal(result.generation.mode,'rules');
+  assert.equal((await generateInterpretation(id,'en')),result);
+  assert.equal(calls,1);
+});
+
 test('optional context is bounded and returned without affecting the frozen deck',()=>{
   assert.throws(()=>createReadingSession({question:'Question',userContext:'x'.repeat(501),spreadId:'general-reflection'}),/500/);
   const session=createReadingSession({question:'Question',userContext:'  A fact.  ',spreadId:'general-reflection',seed:'context'});
