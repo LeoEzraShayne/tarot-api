@@ -18,14 +18,15 @@ const narrativeSchema={
   }
 };
 
-const targetFor=(count,locale)=>locale==='zh-CN'?({1:'500–800 Chinese characters',3:'1200–1800 Chinese characters',6:'2200–3000 Chinese characters',10:'3200–4500 Chinese characters'}[count]||'substantial detail'):({1:'300–500 words',3:'700–1100 words',6:'1300–1900 words',10:'1900–2800 words'}[count]||'substantial detail');
+const targetFor=(count,locale)=>locale==='zh-CN'?({1:'700–1000 Chinese characters',3:'1600–2300 Chinese characters',6:'2800–3800 Chinese characters',10:'4200–5600 Chinese characters'}[count]||'substantial detail'):({1:'400–650 words',3:'950–1400 words',6:'1700–2400 words',10:'2600–3600 words'}[count]||'substantial detail');
 const systemFor=locale=>locale==='zh-CN'
-  ?'你是一个克制、具体、以证据为基础的塔罗反思编辑。你不能预测必然未来，不能补造用户经历，也不能给出医疗、法律、财务或心理诊断。只引用提供的 evidenceId。每个判断都要落到问题语境、可观察事实或可逆行动。'
-  :'You are a restrained, specific, evidence-grounded tarot reflection editor. Never promise outcomes, invent biography, or give medical, legal, financial, or mental-health diagnoses. Cite only supplied evidenceIds. Ground every claim in the question, observable facts, or reversible action.';
+  ?'你是一个温和、充实、具体且以证据为基础的塔罗反思编辑。你的解读要让用户感到被认真理解：充分解释每张牌，但不靠重复、空泛安慰或夸大确定性凑篇幅。你不能预测必然未来，不能补造用户经历，也不能给出医疗、法律、财务或心理诊断。只引用提供的 evidenceId。每个判断都要落到问题语境、可观察事实或可逆行动。'
+  :'You are a warm, substantial, specific, evidence-grounded tarot reflection editor. Help the user feel thoughtfully understood by explaining every card fully, without padding, generic reassurance, or false certainty. Never promise outcomes, invent biography, or give medical, legal, financial, or mental-health diagnoses. Cite only supplied evidenceIds. Ground every claim in the question, observable facts, or reversible action.';
 
 function promptFor(base,locale){
   const evidence=base.sections.map(section=>({evidenceId:section.evidenceIds[0],position:section.position,cardName:section.cardName,orientation:section.orientation,keywords:section.keywords,baseMeaning:section.baseMeaning}));
-  return JSON.stringify({locale,question:base.question,userContext:base.userContext||'',spread:base.spread,evidence,deterministicRelations:base.relations,requiredLength:targetFor(base.sections.length,locale),requiredStructure:['direct response to the question','each card in its position and context','support conflict and transition between cards','assumptions and uncertainty','48-hour action, short-term observation, review question'],safety:'Reflection, not prediction. Do not alter card facts.'});
+  const sectionLength=locale==='zh-CN'?{contextualMeaning:'每张 180–280 个汉字，3–5 句',relation:'每张 90–160 个汉字，2–3 句',reflectionQuestion:'每张 35–70 个汉字，1–2 个具体问题'}:{contextualMeaning:'110–170 words per card, 3–5 sentences',relation:'55–95 words per card, 2–3 sentences',reflectionQuestion:'25–45 words per card, 1–2 specific questions'};
+  return JSON.stringify({locale,question:base.question,userContext:base.userContext||'',spread:base.spread,evidence,deterministicRelations:base.relations,requiredLength:targetFor(base.sections.length,locale),perCardRequirements:sectionLength,requiredStructure:['answer the question directly before qualifying it','for every card explain the core meaning, how orientation changes it, how it may appear in this position, and what observable sign would support or challenge it','connect every card to at least one other position or the spread trajectory; do not repeat the same relation sentence','include both a supportive possibility and a realistic caution without promising an outcome','state assumptions and uncertainty','give a 48-hour action, a short-term observation, and a review question'],style:['warm and reassuring without flattery','specific rather than mystical','use natural paragraphs, not keyword lists','do not repeat stock disclaimers inside every card'],safety:'Reflection, not prediction. Do not alter card facts.'});
 }
 
 function validate(narrative,base){

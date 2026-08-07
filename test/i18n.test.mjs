@@ -5,7 +5,7 @@ import { tarotCards } from '../src/tarotoo.mjs';
 import { tarotCardsZh } from '../src/data/cards.zh.mjs';
 import { SPREADS, localizedSpreads } from '../src/spreads.mjs';
 import { createReadingSession, chooseCards, revealCards, resetSessions } from '../src/session-engine.mjs';
-import { deterministicInterpretation, localizeStoredInterpretation } from '../src/reading-engine.mjs';
+import { deterministicInterpretation, localizeStoredInterpretation, PROMPT_VERSION } from '../src/reading-engine.mjs';
 
 test('all 78 cards have a unique and complete Chinese mapping',()=>{
   assert.equal(tarotCardsZh.length,78);
@@ -52,6 +52,33 @@ test('saved readings are localized without changing their draw',()=>{
   assert.equal(localized.confidence.score,saved.confidence.score);
   assert.notEqual(localized.sections[0].cardName,saved.sections[0].cardName);
   assert.match(localized.safety,/用于反思/);
+});
+
+test('rule fallback gives every card a substantial interpretation across spread sizes',()=>{
+  resetSessions();
+  for(const [spreadId,count] of [['single-focus',1],['general-reflection',3],['whole-self',6],['celtic-cross-classic',10]]){
+    const {id}=createReadingSession({question:'我应该怎样面对目前的变化？',userContext:'事情还没有完全确定。',spreadId,seed:'rich-fallback-'+count});
+    chooseCards(id,Array.from({length:count},(_,index)=>index*7));revealCards(id,'zh-CN');
+    const result=deterministicInterpretation(id,'zh-CN');
+    for(const section of result.sections){
+      assert.ok(section.baseMeaning.length>=100);
+      assert.ok(section.contextualMeaning.length>=180);
+      assert.ok(section.relation.length>=85);
+      assert.ok(section.reflectionQuestion.length>=45);
+    }
+  }
+});
+
+test('legacy saved readings are upgraded to the current rich prompt version',()=>{
+  resetSessions();
+  const {id}=createReadingSession({question:'我应该怎样面对目前的变化？',spreadId:'general-reflection',seed:'legacy-upgrade'});
+  chooseCards(id,[3,24,67]);revealCards(id,'zh-CN');
+  const saved=deterministicInterpretation(id,'zh-CN');
+  const legacy={...saved,generation:{...saved.generation,promptVersion:'ritual-long-v1'},sections:saved.sections.map(section=>({...section,contextualMeaning:'旧版短文案。'}))};
+  const upgraded=localizeStoredInterpretation(legacy,'zh-CN');
+  assert.equal(upgraded.generation.promptVersion,PROMPT_VERSION);
+  assert.ok(upgraded.sections.every(section=>section.contextualMeaning.length>=150));
+  assert.deepEqual(upgraded.draw,saved.draw);
 });
 
 test('unsupported languages fall back to English',async()=>{
